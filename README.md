@@ -14,19 +14,16 @@ Click the green **Use this template** button at the top of this repo to copy the
 
 ## Development
 
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
+Instala a [Mintlify CLI](https://www.npmjs.com/package/mintlify) para ver a documentação em local. Na pasta `docs` (onde está o `docs.json`):
 
-```
-npm i -g mint
-```
-
-Run the following command at the root of your documentation, where your `docs.json` is located:
-
-```
-mint dev
+```bash
+npm i -g mintlify
+mintlify dev
 ```
 
-View your local preview at `http://localhost:3000`.
+Abre o preview em `http://localhost:3000`.
+
+> **Nota:** Em versões antigas da CLI o pacote era `mint` e o comando `mint dev`. Se já tiveres `mint` instalado, podes usar `mint dev` na pasta `docs`.
 
 ## Publishing changes
 
