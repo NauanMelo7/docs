@@ -11,58 +11,30 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Início",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Conhecer",
             "pages": [
               "index",
-              "quickstart",
-              "development"
+              "o-seu-plano"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Começar",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "primeiro-acesso"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Módulos",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Projetos & Faturação",
             "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "modulos/projetos"
             ]
           }
         ]
@@ -102,21 +74,21 @@
   },
   "contextual": {
     "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "mcp",
+      "cursor",
+      "vscode"
+    ]
   },
   "footer": {
     "socials": {
       "github": "https://github.com/foxpixel",
       "linkedin": "https://linkedin.com/company/usefoxpixel"
     },
-    "copyright": "© Fox Pixel. Documentação FoxPixel"
+    "copyright": "© Fox Pixel. Documentação para clientes."
   }
 }
