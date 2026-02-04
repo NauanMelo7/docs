@@ -36,6 +36,12 @@
             "pages": [
               "modulos/projetos"
             ]
+          },
+          {
+            "group": "Conteúdo",
+            "pages": [
+              "modulos/blog"
+            ]
           }
         ]
       }

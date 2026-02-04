@@ -1,0 +1,100 @@
+---
+title: "Módulo Blog"
+description: "Blog integrado ao seu site: artigos, categorias, tags, SEO e automação com IA. Use no painel ou via SDK no seu site."
+---
+
+## O que é o Módulo Blog?
+
+O **Módulo Blog** permite criar e gerir um blog ligado ao seu tenant: artigos, categorias, tags, SEO e (opcionalmente) **automação com IA** para gerar conteúdo com base no contexto do seu negócio. O conteúdo pode ser consumido no seu site através do **SDK** ou de uma API pública.
+
+Funcionalidades incluídas:
+
+- **Artigos**: título, slug, resumo, conteúdo (HTML), imagem de capa, meta SEO, agendamento de publicação.
+- **Categorias e tags**: organização e filtros.
+- **Configurações**: “Cérebro do Negócio” (contexto para IA), idioma padrão, opções de automação.
+- **API pública**: listagem e detalhe de artigos publicados para o seu site (autenticação por API Key).
+
+O add-on **Automação IA** (pago) permite gerar artigos automaticamente com base em tendências e no contexto do negócio (ex.: Gemini para texto, imagens de capa).
+
+---
+
+## Secções no painel (Blog)
+
+No menu **Blog** do painel administrativo (tenant-admin):
+
+### Artigos
+
+- **Lista**: ver todos os artigos (rascunho, agendados, publicados, arquivados).
+- **Novo artigo**: criar artigo com título, slug, resumo, conteúdo, imagem de capa, meta título/descrição e status (Rascunho, Agendado, Publicado, Arquivado).
+- **Editar**: abrir um artigo existente para alterar conteúdo e SEO.
+- **Agendamento**: ao escolher status “Agendado”, defina data/hora; um job no servidor publica automaticamente à hora indicada.
+
+### Categorias
+
+Criar e editar categorias do blog (nome, slug, descrição, cor). Os artigos podem ser associados a uma ou mais categorias.
+
+### Configurações
+
+- **Cérebro do Negócio**: texto que descreve o seu negócio, público-alvo e tom de voz. Usado pela automação IA para gerar conteúdo alinhado ao seu contexto.
+- **Idioma padrão**: idioma em que os artigos automáticos são gerados (ex.: pt-PT, en-US).
+- **Automação**: ativar/desativar a geração automática de artigos (quando o add-on estiver ativo).
+- **Publicar como rascunho**: se ativo, os artigos gerados pela IA ficam como rascunho para revisão antes de publicar.
+
+---
+
+## Usar o blog no seu site (SDK)
+
+Para mostrar o blog no seu site (Next.js, React ou outro front-end), use o **SDK** `@foxpixel/react`:
+
+1. Configure o **FoxPixelProvider** com a URL da API (e, em produção, um proxy para não expor a API Key no browser).
+2. Use os hooks **useBlogPosts** (lista paginada) e **useBlogPost(slug)** (artigo por slug).
+3. Para SEO, use o helper **getBlogPostSchemaLd** para JSON-LD (Schema.org BlogPosting).
+
+Exemplo de listagem:
+
+```tsx
+import { useBlogPosts } from '@foxpixel/react';
+
+const { data, isLoading } = useBlogPosts({ page: 0, limit: 10 });
+// data.content = array de artigos; data.totalElements, data.totalPages, etc.
+```
+
+Exemplo de página de artigo:
+
+```tsx
+import { useBlogPost, getBlogPostSchemaLd } from '@foxpixel/react';
+
+const { data: post } = useBlogPost(slug);
+const schemaLd = getBlogPostSchemaLd(post, { siteUrl: 'https://meusite.com' });
+// Incluir schemaLd em <script type="application/ld+json"> e meta tags (title, description, og:*) no <Head>
+```
+
+A autenticação da API pública é feita por **API Key** com permissão `blog:posts:read`. No template Next.js, a chave é usada no proxy (server-side), nunca no browser.
+
+---
+
+## API pública (referência para desenvolvedores)
+
+Endpoints destinados ao SDK e a sites headless (base URL: `/api/v1/blog`). Requerem API Key com permissão `blog:posts:read`. O tenant é identificado pela API Key.
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/v1/blog/posts` | Lista artigos publicados (paginação: `page`, `size`) |
+| GET | `/api/v1/blog/posts/{slug}` | Detalhe de um artigo publicado pelo slug |
+
+Resposta da listagem segue o formato **Spring Page**: `content` (array de artigos), `totalElements`, `totalPages`, `size`, `number`, `first`, `last`, etc.
+
+Cada artigo inclui: `id`, `title`, `slug`, `excerpt`, `content`, `coverImageUrl`, `metaTitle`, `metaDescription`, `publishedAt`, `readingTimeMinutes`, `categories`, `tags`, `createdAt`, `updatedAt`, entre outros.
+
+---
+
+## Automação IA (add-on)
+
+Quando o add-on de automação está ativo e configurado no n8n:
+
+1. Um workflow (ex.: **Blog Auto Publisher**) corre em agendamento (ex.: diário às 09:00).
+2. O n8n obtém a lista de tenants com automação ativa e a configuração de cada um (Cérebro do Negócio, idioma).
+3. Gera conteúdo com IA (ex.: Gemini) e, se configurado, imagem de capa (ex.: Banana).
+4. Envia o artigo para a API interna do FoxBase; o artigo é criado como rascunho ou publicado consoante as configurações do tenant.
+
+A publicação automática de artigos **agendados** (criados manualmente com data/hora) é feita por um **job no backend**, que corre a cada minuto e altera o status de `SCHEDULED` para `PUBLISHED` quando `scheduled_at` é atingido.
