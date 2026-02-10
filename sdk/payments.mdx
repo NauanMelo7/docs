@@ -1,0 +1,396 @@
+---
+title: "SDK Payments"
+description: "Como integrar pagamentos no seu site usando o SDK FoxPixel com Stripe."
+---
+
+## Visão Geral
+
+O SDK de Payments permite adicionar checkout e pagamentos ao seu site com poucas linhas de código. O processamento é feito pelo Stripe, garantindo segurança e conformidade PCI.
+
+## Pré-requisitos
+
+Antes de usar o SDK de pagamentos:
+
+1. Ative o módulo **Payments** no Tenant Admin
+2. Configure as suas chaves Stripe (Test primeiro, Live depois)
+3. O sistema cria automaticamente os webhooks no Stripe
+
+## Componente CheckoutButton
+
+A forma mais rápida de adicionar um botão de pagamento:
+
+```tsx
+import { CheckoutButton } from '@foxpixel/react/payments';
+
+export function PricingCard() {
+  return (
+    <div className="pricing-card">
+      <h3>Plano Premium</h3>
+      <p className="price">50,00 EUR/mês</p>
+
+      <CheckoutButton
+        amount={5000}
+        currency="EUR"
+        description="Plano Premium - Mensal"
+        customerEmail="cliente@email.com"
+        successUrl="/checkout/sucesso"
+        cancelUrl="/checkout/cancelado"
+        metadata={{
+          plan: 'premium',
+          period: 'monthly'
+        }}
+        className="btn-primary"
+      >
+        Subscrever Agora
+      </CheckoutButton>
+    </div>
+  );
+}
+```
+
+### Props
+
+| Prop | Tipo | Obrigatório | Descrição |
+|------|------|-------------|-----------|
+| `amount` | `number` | Sim | Valor em cêntimos (ex: 5000 = 50.00 EUR) |
+| `currency` | `string` | Sim | Código da moeda (EUR, USD, GBP, BRL) |
+| `description` | `string` | Sim | Descrição do produto/serviço |
+| `customerEmail` | `string` | Não | Email do cliente (pré-preenche no Stripe) |
+| `successUrl` | `string` | Não | URL de redirecionamento após pagamento bem-sucedido |
+| `cancelUrl` | `string` | Não | URL de redirecionamento se o cliente cancelar |
+| `metadata` | `object` | Não | Dados adicionais (ex: orderId, plan) |
+| `referenceId` | `string` | Não | ID de referência do seu sistema |
+| `referenceType` | `string` | Não | Tipo de referência (ex: "order", "subscription") |
+| `className` | `string` | Não | Classes CSS para o botão |
+| `children` | `ReactNode` | Não | Conteúdo do botão |
+
+<Warning>
+O `amount` é sempre em **cêntimos**. Para cobrar 50.00 EUR, passe `amount={5000}`.
+</Warning>
+
+## Hook useCheckout
+
+Para checkout com lógica personalizada:
+
+```tsx
+import { useCheckout } from '@foxpixel/react/payments';
+
+export function CustomCheckoutFlow() {
+  const { createCheckout, isLoading, error } = useCheckout();
+  const [email, setEmail] = useState('');
+
+  const handleCheckout = async () => {
+    try {
+      const result = await createCheckout({
+        amount: 5000,
+        currency: 'EUR',
+        description: 'Plano Premium',
+        customerEmail: email,
+        successUrl: `${window.location.origin}/sucesso`,
+        cancelUrl: `${window.location.origin}/cancelado`,
+        metadata: {
+          source: 'pricing_page',
+          plan: 'premium'
+        }
+      });
+
+      // Guardar paymentId para verificar depois
+      sessionStorage.setItem('pendingPaymentId', result.paymentId);
+
+      // Redirecionar para o Stripe
+      window.location.href = result.checkoutUrl;
+    } catch (err) {
+      console.error('Erro no checkout:', err);
+    }
+  };
+
+  return (
+    <div>
+      <input
+        type="email"
+        placeholder="O seu email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <button onClick={handleCheckout} disabled={isLoading}>
+        {isLoading ? 'A criar sessão...' : 'Pagar 50,00 EUR'}
+      </button>
+      {error && <p className="error">{error.message}</p>}
+    </div>
+  );
+}
+```
+
+### Retorno
+
+```typescript
+interface CheckoutResult {
+  paymentId: string;      // UUID do pagamento no FoxBase
+  checkoutUrl: string;    // URL do Stripe Checkout
+  sessionId: string;      // ID da session no Stripe
+  expiresAt: string;      // Data de expiração da session
+}
+```
+
+## Hook usePaymentStatus
+
+Verifique o estado do pagamento na página de sucesso:
+
+```tsx
+import { usePaymentStatus } from '@foxpixel/react/payments';
+
+export function SuccessPage() {
+  // O paymentId pode vir da URL ou do sessionStorage
+  const params = new URLSearchParams(window.location.search);
+  const paymentId = params.get('paymentId')
+    || sessionStorage.getItem('pendingPaymentId');
+
+  const { data, isLoading, error } = usePaymentStatus({
+    paymentId: paymentId!,
+    pollInterval: 2000,
+    stopOnTerminal: true
+  });
+
+  if (isLoading && !data) {
+    return (
+      <div className="loading">
+        <p>A verificar o seu pagamento...</p>
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (data?.status === 'SUCCEEDED') {
+    return (
+      <div className="success">
+        <h1>Pagamento confirmado!</h1>
+        <p>Obrigado pela sua compra de {(data.amount / 100).toFixed(2)} {data.currency}.</p>
+        <p>{data.description}</p>
+      </div>
+    );
+  }
+
+  if (data?.status === 'FAILED') {
+    return (
+      <div className="error">
+        <h1>Pagamento falhou</h1>
+        <p>Por favor tente novamente.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="processing">
+      <p>O seu pagamento está a ser processado...</p>
+    </div>
+  );
+}
+```
+
+### Opções
+
+| Opção | Tipo | Descrição |
+|-------|------|-----------|
+| `paymentId` | `string` | UUID do pagamento |
+| `pollInterval` | `number` | Intervalo de polling em ms (default: 2000) |
+| `stopOnTerminal` | `boolean` | Parar quando estado for final (default: true) |
+
+### Estados do pagamento
+
+| Estado | Descrição | Terminal? |
+|--------|-----------|-----------|
+| `PENDING` | Checkout criado, aguardando cliente | Não |
+| `PROCESSING` | Checkout completo, aguardando confirmação | Não |
+| `SUCCEEDED` | Pagamento confirmado | Sim |
+| `FAILED` | Pagamento falhou | Sim |
+| `CANCELLED` | Pagamento cancelado | Sim |
+
+## API Direta
+
+Se preferir usar a API diretamente sem o SDK React:
+
+### Criar checkout
+
+```bash
+POST /api/v1/payments/checkout/create
+Authorization: Bearer sk_live_xxxxx
+Content-Type: application/json
+
+{
+  "amount": 5000,
+  "currency": "EUR",
+  "description": "Plano Premium",
+  "receiptEmail": "cliente@email.com",
+  "successUrl": "https://meusite.com/sucesso?paymentId={PAYMENT_ID}",
+  "cancelUrl": "https://meusite.com/cancelado",
+  "metadata": {
+    "orderId": "12345"
+  }
+}
+```
+
+<Note>
+Use `{PAYMENT_ID}` na `successUrl` — será substituído automaticamente pelo ID do pagamento.
+</Note>
+
+**Resposta (200):**
+
+```json
+{
+  "paymentId": "550e8400-e29b-41d4-a716-446655440000",
+  "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_xxxxx",
+  "sessionId": "cs_test_xxxxx",
+  "expiresAt": "2026-02-10T21:00:00Z"
+}
+```
+
+### Verificar estado
+
+```bash
+GET /api/v1/payments/{paymentId}/status
+Authorization: Bearer sk_live_xxxxx
+```
+
+**Resposta (200):**
+
+```json
+{
+  "paymentId": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "SUCCEEDED",
+  "amount": 5000,
+  "currency": "EUR",
+  "description": "Plano Premium",
+  "succeededAt": "2026-02-10T18:35:00Z"
+}
+```
+
+## Integração com Analytics
+
+O SDK passa automaticamente o `visitorId` do analytics para o Stripe via metadata. Isto permite:
+
+- A compra ser rastreada como conversão "purchase"
+- A atribuição ligar a compra ao canal de marketing que trouxe o cliente
+- O revenue aparecer no dashboard de Analytics por canal
+
+```
+Visitante chega via Google Ads → Navega o site → Clica em Comprar
+→ CheckoutButton lê _fp_vid do localStorage
+→ Passa como metadata.visitorId para a API
+→ Stripe processa → Webhook → PaymentAnalyticsListener
+→ Cria conversão "purchase" com atribuição ao Google Ads
+→ Envia para Meta, GA4, TikTok, LinkedIn (server-side)
+```
+
+<Tip>
+Se estiver a chamar a API diretamente (sem o `CheckoutButton`), inclua o `visitorId` no metadata para garantir a atribuição:
+
+```javascript
+const visitorId = localStorage.getItem('_fp_vid');
+const result = await createCheckout({
+  // ...
+  metadata: { visitorId, orderId: '123' }
+});
+```
+</Tip>
+
+## Cartões de Teste
+
+Use estes cartões no modo Test:
+
+| Cartão | Resultado |
+|--------|-----------|
+| `4242 4242 4242 4242` | Pagamento bem-sucedido |
+| `4000 0000 0000 0002` | Cartão recusado |
+| `4000 0000 0000 9995` | Fundos insuficientes |
+| `4000 0000 0000 3220` | Autenticação 3D Secure |
+
+Data de expiração: qualquer data futura. CVV: qualquer 3 dígitos.
+
+## Exemplo Completo
+
+Um fluxo completo de e-commerce com checkout e confirmação:
+
+```tsx
+// pages/produto/[id].tsx
+import { CheckoutButton } from '@foxpixel/react/payments';
+
+export default function ProductPage({ product }) {
+  return (
+    <div>
+      <h1>{product.name}</h1>
+      <p>{product.description}</p>
+      <p className="price">{(product.price / 100).toFixed(2)} EUR</p>
+
+      <CheckoutButton
+        amount={product.price}
+        currency="EUR"
+        description={product.name}
+        successUrl={`/checkout/sucesso?product=${product.id}`}
+        cancelUrl={`/produto/${product.id}`}
+        metadata={{
+          productId: product.id,
+          productName: product.name
+        }}
+      >
+        Comprar
+      </CheckoutButton>
+    </div>
+  );
+}
+```
+
+```tsx
+// pages/checkout/sucesso.tsx
+import { usePaymentStatus } from '@foxpixel/react/payments';
+
+export default function SuccessPage() {
+  const { paymentId } = useSearchParams();
+
+  const { data } = usePaymentStatus({
+    paymentId,
+    pollInterval: 2000,
+    stopOnTerminal: true
+  });
+
+  return (
+    <div>
+      {data?.status === 'SUCCEEDED' ? (
+        <>
+          <h1>Compra confirmada!</h1>
+          <p>Valor: {(data.amount / 100).toFixed(2)} {data.currency}</p>
+          <p>Receberá um email de confirmação em breve.</p>
+        </>
+      ) : (
+        <p>A processar o seu pagamento...</p>
+      )}
+    </div>
+  );
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="O checkout não redireciona">
+    Verifique se:
+    1. O módulo Payments está ativo no Tenant Admin
+    2. As chaves Stripe estão configuradas
+    3. A API Key do site tem permissão `payments:checkout:create`
+  </Accordion>
+
+  <Accordion title="O webhook não processa o pagamento">
+    1. Verifique se os webhooks foram criados automaticamente (Stripe Dashboard > Webhooks)
+    2. Verifique se a variável `API_BASE_URL` está configurada corretamente
+    3. Verifique os logs no tab Logs do módulo Payments
+  </Accordion>
+
+  <Accordion title="A compra não aparece no Analytics">
+    1. Verifique se o `CheckoutButton` está a ser usado (ou se o `visitorId` está no metadata)
+    2. Verifique se o visitante tem touchpoints anteriores no Analytics
+    3. O pagamento precisa estar SUCCEEDED para gerar conversão
+  </Accordion>
+
+  <Accordion title="Erro 'Payments not configured'">
+    O tenant ainda não configurou as chaves Stripe. Aceda ao Tenant Admin > Payments > Configuração e insira as chaves.
+  </Accordion>
+</AccordionGroup>

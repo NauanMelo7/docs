@@ -1,0 +1,306 @@
+---
+title: "Payments"
+description: "Processamento de pagamentos multi-tenant com Stripe: checkout, reembolsos, disputas e integração com analytics."
+---
+
+## O que é o Módulo Payments?
+
+O módulo Payments permite processar pagamentos no seu site usando o Stripe. Cada tenant tem a sua própria conta Stripe, com suporte a:
+
+- **Checkout sessions** — Páginas de pagamento alojadas no Stripe
+- **Modo Test/Live** — Teste com dados fictícios antes de ir para produção
+- **Webhooks automáticos** — O sistema configura os webhooks no Stripe automaticamente
+- **Reembolsos** — Totais ou parciais, diretamente do painel
+- **Disputas** — Gestão de chargebacks com alertas
+- **Analytics integration** — Compras são rastreadas como conversões automaticamente
+
+## Como funciona o Checkout
+
+<Steps>
+<Step title="O developer adiciona o botão de checkout ao site">
+  Usando o `CheckoutButton` do SDK ou a API diretamente, cria-se uma sessão de checkout.
+</Step>
+
+<Step title="O cliente é redirecionado para o Stripe">
+  O Stripe aloja a página de pagamento. O cliente introduz os dados do cartão.
+</Step>
+
+<Step title="O Stripe notifica o FoxBase via webhook">
+  O webhook é validado com a assinatura do Stripe e o pagamento é processado.
+</Step>
+
+<Step title="O painel mostra a transação">
+  O pagamento aparece no dashboard com todos os detalhes, logs e opções de reembolso.
+</Step>
+</Steps>
+
+## Painel de Administração
+
+### Configuração
+
+Antes de aceitar pagamentos, configure as suas chaves Stripe:
+
+1. Aceda a **Payments > Configuração**
+2. Insira as chaves **Test** do Stripe (para testes)
+3. O sistema cria automaticamente os webhooks
+4. Quando estiver pronto, insira as chaves **Live** e mude o modo
+
+<Warning>
+Nunca partilhe as suas Secret Keys. O sistema encripta-as automaticamente com AES-256-GCM.
+</Warning>
+
+### Dashboard
+
+O tab Overview mostra:
+
+| Métrica | Descrição |
+|---------|-----------|
+| **Revenue Total** | Soma de todos os pagamentos bem-sucedidos |
+| **Taxa de Sucesso** | Percentagem de pagamentos concluídos |
+| **Ticket Médio** | Valor médio por pagamento |
+| **Reembolsos** | Total reembolsado e taxa de reembolso |
+
+Inclui gráficos diários de revenue e contagem de transações.
+
+### Transações
+
+Lista paginada com:
+- Filtro por status (Succeeded, Failed, Pending, Cancelled)
+- Pesquisa por email, descrição ou ID
+- Detalhe de cada transação com logs de debug
+- Ação de reembolso (total ou parcial)
+
+### Disputas
+
+- Lista de disputas ativas
+- Alertas urgentes para disputas que precisam de resposta
+- Deadline de evidência
+
+### Export CSV
+
+Exporte todas as transações como CSV com colunas: ID, Data, Status, Valor, Moeda, Descrição, Email, Método de Pagamento, Impostos, Reembolsado, Razão de Falha, Modo.
+
+## SDK: Criar Checkout
+
+### Componente React
+
+A forma mais simples de adicionar pagamentos ao seu site:
+
+```tsx
+import { CheckoutButton } from '@foxpixel/react/payments';
+
+export function BuyButton() {
+  return (
+    <CheckoutButton
+      amount={5000}           // em cêntimos (50.00 EUR)
+      currency="EUR"
+      description="Plano Premium"
+      customerEmail="cliente@email.com"
+      successUrl="/obrigado"
+      cancelUrl="/cancelado"
+      metadata={{
+        orderId: '12345',
+        plan: 'premium'
+      }}
+    >
+      Comprar Agora
+    </CheckoutButton>
+  );
+}
+```
+
+O componente:
+1. Chama a API de checkout
+2. Recebe a URL do Stripe
+3. Redireciona o cliente automaticamente
+4. Passa o `visitorId` do analytics para atribuição
+
+### Hook useCheckout
+
+Para mais controlo:
+
+```tsx
+import { useCheckout } from '@foxpixel/react/payments';
+
+export function CustomCheckout() {
+  const { createCheckout, isLoading, error } = useCheckout();
+
+  const handleBuy = async () => {
+    const result = await createCheckout({
+      amount: 5000,
+      currency: 'EUR',
+      description: 'Plano Premium',
+      customerEmail: 'cliente@email.com',
+      successUrl: window.location.origin + '/obrigado',
+      cancelUrl: window.location.origin + '/cancelado',
+      metadata: { orderId: '12345' }
+    });
+
+    // Redirecionar para o Stripe
+    window.location.href = result.checkoutUrl;
+  };
+
+  return (
+    <button onClick={handleBuy} disabled={isLoading}>
+      {isLoading ? 'A processar...' : 'Comprar'}
+    </button>
+  );
+}
+```
+
+### Verificar estado do pagamento
+
+Após o checkout, na página de sucesso:
+
+```tsx
+import { usePaymentStatus } from '@foxpixel/react/payments';
+
+export function SuccessPage() {
+  const paymentId = new URLSearchParams(window.location.search).get('paymentId');
+
+  const { data, isLoading } = usePaymentStatus({
+    paymentId,
+    pollInterval: 2000,     // Verifica a cada 2 segundos
+    stopOnTerminal: true     // Para quando o estado é final
+  });
+
+  if (isLoading) return <p>A verificar pagamento...</p>;
+
+  if (data?.status === 'SUCCEEDED') {
+    return <p>Pagamento confirmado! Obrigado.</p>;
+  }
+
+  return <p>Estado: {data?.status}</p>;
+}
+```
+
+## API Pública
+
+Autenticação via API Key (`Authorization: Bearer sk_live_xxxxx`).
+
+### Criar checkout session
+
+```bash
+POST /api/v1/payments/checkout/create
+Authorization: Bearer sk_live_xxxxx
+Content-Type: application/json
+
+{
+  "amount": 5000,
+  "currency": "EUR",
+  "description": "Plano Premium",
+  "receiptEmail": "cliente@email.com",
+  "successUrl": "https://meusite.com/obrigado?paymentId={PAYMENT_ID}",
+  "cancelUrl": "https://meusite.com/cancelado",
+  "metadata": {
+    "orderId": "12345",
+    "plan": "premium"
+  }
+}
+```
+
+**Resposta:**
+
+```json
+{
+  "paymentId": "uuid-do-pagamento",
+  "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_xxx",
+  "sessionId": "cs_xxx",
+  "expiresAt": "2026-02-10T20:00:00Z"
+}
+```
+
+### Verificar estado
+
+```bash
+GET /api/v1/payments/{paymentId}/status
+Authorization: Bearer sk_live_xxxxx
+```
+
+**Resposta:**
+
+```json
+{
+  "paymentId": "uuid-do-pagamento",
+  "status": "SUCCEEDED",
+  "amount": 5000,
+  "currency": "EUR",
+  "description": "Plano Premium",
+  "succeededAt": "2026-02-10T18:30:00Z"
+}
+```
+
+## Webhooks
+
+O sistema configura automaticamente os webhooks no Stripe quando guarda a configuração. Os eventos processados são:
+
+| Evento Stripe | Ação |
+|--------------|------|
+| `checkout.session.completed` | Pagamento marcado como PROCESSING |
+| `payment_intent.succeeded` | Pagamento marcado como SUCCEEDED |
+| `payment_intent.payment_failed` | Pagamento marcado como FAILED |
+| `payment_intent.canceled` | Pagamento marcado como CANCELLED |
+| `charge.refunded` | Valor reembolsado atualizado |
+| `charge.dispute.created` | Disputa criada com alerta |
+| `charge.dispute.closed` | Disputa marcada como WON/LOST |
+
+<Note>
+Os webhooks são idempotentes — processar o mesmo evento duas vezes não causa problemas.
+</Note>
+
+## Eventos de Domínio
+
+Outros módulos podem reagir a eventos de pagamento:
+
+| Evento | Quando acontece |
+|--------|----------------|
+| `PAYMENT_CREATED` | Checkout session criada |
+| `PAYMENT_SUCCEEDED` | Pagamento confirmado |
+| `PAYMENT_FAILED` | Pagamento falhou |
+| `PAYMENT_CANCELLED` | Pagamento cancelado |
+| `PAYMENT_REFUNDED` | Reembolso processado |
+| `DISPUTE_NEEDS_RESPONSE` | Disputa precisa de resposta |
+| `DISPUTE_WON` | Disputa ganha |
+| `DISPUTE_LOST` | Disputa perdida |
+
+## Integração com Analytics
+
+Quando ambos os módulos estão ativos:
+
+- **Compras** são automaticamente rastreadas como conversões "purchase"
+- **Reembolsos** são enviados como eventos "refund" para as plataformas de anúncios
+- A **atribuição** liga a compra aos touchpoints de marketing do visitante
+- Os dados aparecem no tab **Revenue** do Analytics
+
+<Tip>
+Para que a atribuição funcione corretamente, use o `CheckoutButton` do SDK — ele passa automaticamente o `visitorId` para o Stripe.
+</Tip>
+
+## Permissões
+
+| Permissão | Descrição |
+|-----------|-----------|
+| `payments:config:read` | Ver configuração Stripe |
+| `payments:config:write` | Editar configuração |
+| `payments:config:delete` | Remover configuração |
+| `payments:transactions:read` | Ver transações |
+| `payments:transactions:create` | Criar pagamentos |
+| `payments:refunds:read` | Ver reembolsos |
+| `payments:refunds:create` | Criar reembolsos |
+| `payments:disputes:read` | Ver disputas |
+| `payments:disputes:write` | Gerir disputas |
+| `payments:stats:read` | Ver estatísticas |
+| `payments:logs:read` | Ver logs de debug |
+| `payments:checkout:create` | Criar checkout (SDK) |
+| `payments:checkout:read` | Ver estado do checkout (SDK) |
+
+## Modos Test e Live
+
+| | Modo Test | Modo Live |
+|---|-----------|-----------|
+| **Chaves** | `pk_test_xxx` / `sk_test_xxx` | `pk_live_xxx` / `sk_live_xxx` |
+| **Dinheiro real** | Não | Sim |
+| **Cartões de teste** | `4242 4242 4242 4242` | Cartões reais |
+| **Webhooks** | Endpoint separado | Endpoint separado |
+
+Pode alternar entre modos a qualquer momento sem perder configuração.

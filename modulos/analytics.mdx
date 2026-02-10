@@ -1,0 +1,234 @@
+---
+title: "Analytics"
+description: "Analytics completo para o seu site: tracking de visitantes, atribuição de conversões, integração com plataformas de anúncios e GDPR."
+---
+
+## O que é o Módulo Analytics?
+
+O módulo Analytics da FoxPixel é uma plataforma de analytics privacy-first, sem cookies, que substitui o Google Analytics e fornece:
+
+- **Tracking de visitantes** em tempo real (pageviews, eventos custom, SPA)
+- **Modelos de atribuição** multi-touch (Last Click, First Click, Linear, Time Decay, Position-Based, W-Shaped)
+- **Conversões server-side** para Meta, GA4, TikTok e LinkedIn
+- **Revenue analytics** com funil de conversão e ROI por canal
+- **Gestão de consentimento** GDPR/LGPD integrada
+- **Integração com Payments** — compras são automaticamente rastreadas como conversões
+
+## Como funciona
+
+<Steps>
+<Step title="Script de tracking no site">
+  O seu site carrega automaticamente o `foxpixel-analytics.js`. Este script:
+  - Gera um fingerprint do browser (sem cookies)
+  - Rastreia pageviews e navegação SPA
+  - Agrupa eventos em batches para performance zero-impact
+  - Envia dados via Beacon API
+</Step>
+
+<Step title="Processamento no backend">
+  O FoxBase recebe os eventos, cria sessões, e regista touchpoints de marketing (UTM parameters). Os dados ficam isolados por tenant.
+</Step>
+
+<Step title="Dashboard no Tenant Admin">
+  No painel de administração, vê métricas de visitantes, sessões, fontes de tráfego, dispositivos, países, atribuição de conversões e revenue.
+</Step>
+
+<Step title="Conversões server-side">
+  Quando uma conversão acontece (lead, compra), o sistema envia o evento para as plataformas de anúncios configuradas (Meta, GA4, TikTok, LinkedIn) via API server-side.
+</Step>
+</Steps>
+
+## Painel de Administração
+
+O módulo Analytics no Tenant Admin tem 7 abas:
+
+| Aba | O que mostra |
+|-----|-------------|
+| **Visão Geral** | KPIs (visitantes, sessões, pageviews, bounce rate), gráfico de tendência, top sources, dispositivos |
+| **Tráfego** | Análise detalhada de tráfego: tendência, fontes, dispositivos, top páginas, países |
+| **Conversões** | Logs de conversões server-side: total enviado, sucesso/erro por plataforma |
+| **Atribuição** | Modelos de atribuição (6 modelos) com crédito por canal |
+| **Jornadas** | Timeline visual das jornadas do cliente até à conversão |
+| **Receita** | Revenue por canal, CAC, ROI, funil de conversão, export CSV |
+| **Comportamento** | Integração com Microsoft Clarity e Hotjar |
+
+### Configurações
+
+A página de configurações (Settings) permite configurar:
+
+- **Google Tag Manager** — Container ID para GTM
+- **Pixels client-side** — Meta Pixel, GA4, TikTok Pixel, LinkedIn Insight Tag
+- **APIs server-side** — Meta Conversions API, GA4 Measurement Protocol, TikTok Events API, LinkedIn Conversions
+- **Comportamento** — Microsoft Clarity, Hotjar
+- **GDPR** — Banner de consentimento (ativar/desativar, texto multilíngue)
+
+## SDK: Tracking no Site
+
+### Script automático
+
+O script `foxpixel-analytics.js` é carregado automaticamente no seu site. Não precisa de configuração adicional.
+
+### Eventos custom
+
+Para rastrear eventos personalizados no seu site:
+
+```javascript
+// Rastrear um evento custom
+foxpixel.track('click', 'cta_button', {
+  button_text: 'Comprar agora',
+  page: '/produto/123'
+});
+
+// Rastrear submissão de formulário
+foxpixel.track('form_submit', 'contact_form', {
+  form_id: 'contact',
+  source: 'homepage'
+});
+```
+
+### Identificação do visitante
+
+O script gera automaticamente um `visitorId` (fingerprint do browser) e armazena em `localStorage._fp_vid`. Este ID é usado para:
+
+- Ligar sessões ao mesmo visitante
+- Atribuição de conversões
+- Rastreamento de jornada do cliente
+
+<Warning>
+O `visitorId` é um fingerprint do browser, não do utilizador. O mesmo utilizador em dois dispositivos = dois visitantes.
+</Warning>
+
+### Integração com GTM
+
+Se tiver o Google Tag Manager configurado, o script envia automaticamente eventos para o `dataLayer`:
+
+- `foxpixel_pageview` — em cada pageview
+- `foxpixel_event` — em cada evento custom
+
+Pode criar triggers no GTM baseados nestes eventos.
+
+## SDK: Consentimento GDPR
+
+### Banner de consentimento
+
+O banner de consentimento é configurado no Tenant Admin. Quando ativado, o script espera pelo consentimento antes de começar a rastrear.
+
+### Programático
+
+```javascript
+// Verificar consentimento atual
+const consent = localStorage.getItem('foxpixel_consent');
+
+// Dar consentimento programaticamente
+localStorage.setItem('foxpixel_consent', JSON.stringify({
+  essential: true,
+  analytics: true,
+  marketing: false,
+  preferences: true
+}));
+
+// Notificar o script que o consentimento mudou
+window.dispatchEvent(new Event('foxpixel_consent_update'));
+```
+
+## API Pública
+
+Estas são as APIs disponíveis para o seu site (autenticação via API Key):
+
+### Enviar eventos
+
+```bash
+POST /api/v1/analytics/events
+Authorization: Bearer sk_live_xxxxx
+Content-Type: application/json
+
+{
+  "events": [
+    {
+      "eventType": "pageview",
+      "visitorId": "abc123",
+      "sessionId": "sess_456",
+      "pageUrl": "https://meusite.com/produto",
+      "pageTitle": "Produto X",
+      "referrer": "https://google.com",
+      "utmSource": "google",
+      "utmMedium": "cpc",
+      "utmCampaign": "spring_sale",
+      "deviceType": "desktop",
+      "browser": "Chrome",
+      "os": "macOS",
+      "screenWidth": 1920,
+      "screenHeight": 1080
+    }
+  ]
+}
+```
+
+<Note>
+Normalmente não precisa de chamar esta API diretamente — o script `foxpixel-analytics.js` faz isto automaticamente.
+</Note>
+
+### Guardar consentimento
+
+```bash
+POST /api/v1/site/consent
+Authorization: Bearer sk_live_xxxxx
+Content-Type: application/json
+
+{
+  "visitorId": "abc123",
+  "essential": true,
+  "analytics": true,
+  "marketing": false,
+  "preferences": true,
+  "consentMethod": "banner_accept_all"
+}
+```
+
+### Obter tracking config
+
+```bash
+GET /api/v1/site/tracking-config
+Authorization: Bearer sk_live_xxxxx
+```
+
+Retorna os IDs dos pixels e GTM configurados para injetar no site.
+
+## Integração com Payments
+
+Quando o módulo Payments está ativo, as compras são **automaticamente** rastreadas como conversões:
+
+1. O cliente faz checkout (o `visitorId` é passado via metadata do Stripe)
+2. O pagamento é processado com sucesso
+3. O `PaymentAnalyticsListener` cria uma conversão "purchase" com:
+   - Valor da compra
+   - Atribuição first-touch e last-touch
+   - Ligação a todos os touchpoints do visitante
+4. A conversão é enviada server-side para Meta, GA4, TikTok e LinkedIn
+
+<Tip>
+Para que a atribuição funcione, certifique-se que o `CheckoutButton` está a ser usado no site — ele passa automaticamente o `visitorId` para o Stripe.
+</Tip>
+
+## Modelos de Atribuição
+
+| Modelo | Como funciona |
+|--------|--------------|
+| **Last Click** | 100% do crédito ao último touchpoint antes da conversão |
+| **First Click** | 100% do crédito ao primeiro touchpoint |
+| **Linear** | Crédito distribuído igualmente por todos os touchpoints |
+| **Time Decay** | Mais crédito aos touchpoints mais recentes |
+| **Position-Based** | 40% primeiro + 40% último + 20% distribuído pelo meio |
+| **W-Shaped** | 30% primeiro + 30% lead + 30% último + 10% distribuído |
+
+## Permissões
+
+| Permissão | Descrição |
+|-----------|-----------|
+| `analytics:dashboard:read` | Ver dashboard |
+| `analytics:reports:read` | Ver relatórios |
+| `analytics:config:read` | Ver configurações |
+| `analytics:config:write` | Editar configurações |
+| `analytics:attribution:read` | Ver atribuição |
+| `analytics:conversions:read` | Ver conversões |
+| `analytics:behavior:read` | Ver comportamento |

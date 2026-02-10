@@ -42,6 +42,35 @@
             "pages": [
               "modulos/blog"
             ]
+          },
+          {
+            "group": "Analytics & Marketing",
+            "pages": [
+              "modulos/analytics"
+            ]
+          },
+          {
+            "group": "Pagamentos",
+            "pages": [
+              "modulos/payments"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDK & Integração",
+        "groups": [
+          {
+            "group": "Tracking & Analytics",
+            "pages": [
+              "sdk/analytics"
+            ]
+          },
+          {
+            "group": "Pagamentos",
+            "pages": [
+              "sdk/payments"
+            ]
           }
         ]
       }

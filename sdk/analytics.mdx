@@ -1,0 +1,245 @@
+---
+title: "SDK Analytics"
+description: "Como integrar o tracking de analytics no seu site usando o SDK FoxPixel."
+---
+
+## Visão Geral
+
+O SDK de Analytics da FoxPixel fornece tracking automático de visitantes, sessões e eventos no seu site. Funciona sem cookies, respeitando a privacidade dos utilizadores e o GDPR/LGPD.
+
+## Instalação
+
+O script de analytics é incluído automaticamente no site-template. Se estiver a construir um site custom, adicione o script:
+
+```html
+<script
+  src="https://api.usefoxpixel.com/foxpixel-analytics.js"
+  data-site-id="SEU_TENANT_ID"
+  defer
+></script>
+```
+
+Ou no Next.js:
+
+```tsx
+// app/layout.tsx
+import Script from 'next/script';
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        {children}
+        <Script
+          src="https://api.usefoxpixel.com/foxpixel-analytics.js"
+          data-site-id="SEU_TENANT_ID"
+          strategy="afterInteractive"
+        />
+      </body>
+    </html>
+  );
+}
+```
+
+## O que é rastreado automaticamente
+
+| Evento | Quando | Dados recolhidos |
+|--------|--------|-----------------|
+| **Pageview** | Cada carregamento de página | URL, título, referrer, UTM params |
+| **Navegação SPA** | Mudança de rota (pushState/replaceState) | Nova URL, título anterior, título novo |
+| **Dados do dispositivo** | Em cada evento | Tipo (desktop/mobile/tablet), browser, OS, resolução |
+| **UTM Parameters** | Se presentes na URL | source, medium, campaign, term, content |
+
+## Eventos Custom
+
+Rastreie ações específicas dos utilizadores:
+
+```javascript
+// Básico
+foxpixel.track('click', 'cta_hero');
+
+// Com propriedades
+foxpixel.track('click', 'add_to_cart', {
+  productId: '123',
+  productName: 'Produto X',
+  price: 29.99
+});
+
+// Form submit
+foxpixel.track('form_submit', 'newsletter', {
+  formId: 'footer-newsletter',
+  email: 'user@example.com'
+});
+
+// Scroll depth
+foxpixel.track('scroll', 'page_50', {
+  percentage: 50,
+  page: window.location.pathname
+});
+```
+
+### Assinatura da função
+
+```typescript
+foxpixel.track(
+  eventType: string,    // Tipo do evento (click, form_submit, scroll, custom)
+  eventName: string,    // Nome identificador do evento
+  properties?: object   // Propriedades adicionais (opcional)
+): void
+```
+
+## Identificação do Visitante
+
+O SDK usa **fingerprinting do browser** para identificar visitantes, sem cookies:
+
+| Storage | Chave | Duração | Conteúdo |
+|---------|-------|---------|----------|
+| `localStorage` | `_fp_vid` | Permanente | Hash FNV-1a (canvas + UA + screen + timezone) |
+| `sessionStorage` | `_fp_sid` | Até fechar o tab | UUID aleatório |
+
+### Aceder ao visitorId
+
+```javascript
+// Obter o visitor ID (útil para integrar com checkout)
+const visitorId = localStorage.getItem('_fp_vid');
+```
+
+<Warning>
+O `visitorId` identifica um browser, não um utilizador. O mesmo utilizador em Chrome e Safari = dois visitantes diferentes.
+</Warning>
+
+## Consentimento GDPR/LGPD
+
+O tracking respeita as preferências de consentimento do utilizador.
+
+### Fluxo automático
+
+1. Se o banner GDPR está ativado no Tenant Admin, o script espera pelo consentimento
+2. Quando o utilizador aceita, o consentimento é guardado em `localStorage`
+3. O script começa a rastrear
+
+### Controlo programático
+
+```javascript
+// Dar consentimento
+function acceptAll() {
+  localStorage.setItem('foxpixel_consent', JSON.stringify({
+    essential: true,
+    analytics: true,
+    marketing: true,
+    preferences: true
+  }));
+  window.dispatchEvent(new Event('foxpixel_consent_update'));
+}
+
+// Rejeitar marketing
+function acceptMinimal() {
+  localStorage.setItem('foxpixel_consent', JSON.stringify({
+    essential: true,
+    analytics: true,
+    marketing: false,
+    preferences: false
+  }));
+  window.dispatchEvent(new Event('foxpixel_consent_update'));
+}
+
+// Verificar consentimento
+function hasMarketingConsent() {
+  try {
+    const consent = JSON.parse(localStorage.getItem('foxpixel_consent') || '{}');
+    return consent.marketing === true;
+  } catch {
+    return false;
+  }
+}
+```
+
+### Categorias de consentimento
+
+| Categoria | Descrição | Padrão |
+|-----------|-----------|--------|
+| `essential` | Funcionalidade básica | Sempre true |
+| `analytics` | Tracking de visitantes e sessões | false |
+| `marketing` | Pixels e conversões para plataformas de anúncios | false |
+| `preferences` | Preferências de personalização | false |
+
+## Integração com GTM
+
+Se o Google Tag Manager está configurado no Tenant Admin, o script envia automaticamente eventos para o `dataLayer`:
+
+```javascript
+// Evento de pageview enviado ao GTM
+window.dataLayer.push({
+  event: 'foxpixel_pageview',
+  page_url: 'https://meusite.com/produto',
+  page_title: 'Produto X'
+});
+
+// Evento custom enviado ao GTM
+window.dataLayer.push({
+  event: 'foxpixel_event',
+  event_type: 'click',
+  event_name: 'add_to_cart',
+  event_data: { productId: '123' }
+});
+```
+
+### Criar triggers no GTM
+
+1. No GTM, crie um trigger tipo **Custom Event**
+2. Nome do evento: `foxpixel_pageview` ou `foxpixel_event`
+3. Use variáveis do Data Layer para aceder aos dados
+
+## Performance
+
+O script é otimizado para zero impacto na performance:
+
+- **Tamanho**: < 3KB gzipped
+- **Batching**: Eventos são agrupados (máx 20 ou a cada 5 segundos)
+- **Beacon API**: Envio assíncrono que não bloqueia a página
+- **Defer**: Carregamento após o DOM, não bloqueia renderização
+- **Flush automático**: Envia eventos pendentes quando o utilizador sai da página
+
+## API Reference
+
+### Endpoints públicos
+
+<Note>
+Estes endpoints são usados internamente pelo script. Normalmente não precisa de os chamar diretamente.
+</Note>
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | `/api/v1/analytics/events` | Enviar batch de eventos |
+| POST | `/api/v1/site/consent` | Guardar consentimento |
+| GET | `/api/v1/site/consent?visitorId=X` | Obter consentimento |
+| GET | `/api/v1/site/tracking-config` | Obter config de tracking |
+
+Todos requerem autenticação via API Key: `Authorization: Bearer sk_live_xxxxx`
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Os eventos não aparecem no dashboard">
+    1. Verifique se o script está carregado (tab Network no DevTools)
+    2. Verifique se o consentimento foi dado (`localStorage.getItem('foxpixel_consent')`)
+    3. Os eventos são enviados em batch — espere até 5 segundos
+    4. Verifique se o `data-site-id` está correto
+  </Accordion>
+
+  <Accordion title="O visitor ID muda entre visitas">
+    O fingerprint pode mudar se o utilizador:
+    - Atualiza o browser
+    - Muda a resolução do ecrã
+    - Limpa o localStorage
+    
+    Isto é esperado e é uma consequência do tracking sem cookies.
+  </Accordion>
+
+  <Accordion title="Os UTM parameters não aparecem">
+    Verifique se os parâmetros estão na URL:
+    `https://meusite.com?utm_source=google&utm_medium=cpc&utm_campaign=spring`
+    
+    O script captura automaticamente `utm_source`, `utm_medium`, `utm_campaign`, `utm_term` e `utm_content`.
+  </Accordion>
+</AccordionGroup>
